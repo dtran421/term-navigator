@@ -6,6 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-inquire = "0.5.3"
 dialoguer = "0.10.3"
 console = "0.15.5"
+clap = { version = "4.1.4", features = ["derive"] }
