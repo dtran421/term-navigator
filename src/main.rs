@@ -4,24 +4,22 @@ use std::io::{self, Error};
 use std::path::PathBuf;
 
 use clap::Parser;
-use console::{self, Term};
-use dialoguer::{theme::ColorfulTheme, Confirm, Select};
+use dialoguer::{Confirm, Select};
+use display::term_obj;
+
+mod display;
 
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(
+    author = "Duke Tran",
+    version,
+    about = "Terminal Navigator",
+    long_about = "A simple CLI utility for navigating through your filesystem via the terminal."
+)]
 struct Args {
-    /// Name of the person to greet
-    #[arg(short, long)]
-    name: String,
-
-    /// Number of times to greet
-    #[arg(short, long, default_value_t = 1)]
-    count: u8,
-}
-
-struct TermObj {
-    term: Term,
-    theme: ColorfulTheme,
+    /// List results with numbers
+    #[arg(short = 'n', long = "numbered", default_value_t = false)]
+    numbered: bool,
 }
 
 fn valid_path(entry: &DirEntry) -> bool {
@@ -63,17 +61,16 @@ fn get_path_options(path: &PathBuf) -> Result<Vec<String>, Error> {
     return Ok([default_options, path_options].concat());
 }
 
-fn confirm_path(term_obj: &TermObj, path: &PathBuf) -> bool {
+fn confirm_path(path: &PathBuf) -> bool {
     let pathname = path.to_str().expect("path string");
 
-    Confirm::with_theme(&term_obj.theme)
-        .with_prompt(format!("Confirm navigation to: {}?", pathname))
-        .interact_on(&term_obj.term)
+    Confirm::with_theme(&term_obj().theme)
+        .with_prompt(format!("Confirm navigation to: {}?", &pathname))
+        .interact_on(&term_obj().term)
         .expect("confirm prompt displays and interactable")
 }
 
 fn handle_selection(
-    term_obj: &TermObj,
     origin: &PathBuf,
     path: &mut PathBuf,
     options: &Vec<String>,
@@ -85,9 +82,9 @@ fn handle_selection(
                 return false;
             }
 
-            let confirm = confirm_path(&term_obj, &path);
+            let confirm = confirm_path(&path);
             if confirm {
-                term_obj.term.clear_screen().expect("console cleared");
+                term_obj().term.clear_screen().expect("console cleared");
                 println!("{}", path.to_str().expect("path string"));
                 return false;
             }
@@ -103,62 +100,29 @@ fn handle_selection(
     return true;
 }
 
-fn display_curr_dir(term: &Term, path: &PathBuf) {
-    let parent = path.parent().expect("path parent exists");
-    let mut parent_str = parent.to_str().expect("parent string exists").to_owned();
-    parent_str.push_str("/");
-
-    let curr = path
-        .file_stem()
-        .expect("path file stem exists")
-        .to_str()
-        .expect("file stem to str");
-
-    let formatted_path_str = format!(
-        "{} The current directory is {}{}",
-        console::style(">").cyan(),
-        console::style(parent_str).blue().dim(),
-        console::style(curr).magenta().bold()
-    );
-    term.write_line(formatted_path_str.as_str())
-        .expect("console write");
-}
-
-fn display_header(term: &Term, path: &PathBuf) {
-    term.write_line("[........TERM-NAVIGATOR........]")
-        .expect("console write");
-    display_curr_dir(&term, &path);
-    term.write_line("--------------------------------")
-        .expect("console write");
-}
-
 fn main() -> io::Result<()> {
-    let term_obj = TermObj {
-        term: Term::stderr(),
-        theme: ColorfulTheme::default(),
-    };
+    let args = Args::parse();
+    println!("{}", args.numbered);
 
-    console::set_colors_enabled_stderr(true);
-
-    let origin = env::current_dir()?/* PathBuf::from(&args[1]) */;
-    let mut path = env::current_dir()?/* PathBuf::from(&args[1]) */;
+    let origin = env::current_dir()?;
+    let mut path = env::current_dir()?;
 
     let mut repl = true;
     while repl {
-        term_obj.term.clear_screen()?;
-        display_header(&term_obj.term, &path);
+        term_obj().term.clear_screen()?;
+        display::display_header(&origin, &path);
 
         let options = get_path_options(&path)?;
 
-        let selection = Select::with_theme(&term_obj.theme)
+        let selection = Select::with_theme(&term_obj().theme)
             .items(&options)
             .default(0)
-            .interact_on_opt(&term_obj.term)?;
+            .interact_on_opt(&term_obj().term)?;
 
         repl = match selection {
-            Some(index) => handle_selection(&term_obj, &origin, &mut path, &options, index),
+            Some(index) => handle_selection(&origin, &mut path, &options, index),
             None => {
-                term_obj.term.write_line("User did not select anything")?;
+                term_obj().term.write_line("User did not select anything")?;
                 false
             }
         };
