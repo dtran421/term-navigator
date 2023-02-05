@@ -4,8 +4,9 @@ use std::io::{self, Error};
 use std::path::PathBuf;
 
 use clap::Parser;
-use dialoguer::{Confirm, Select};
+use dialoguer::{Confirm, FuzzySelect};
 use display::term_obj;
+use regex::Regex;
 
 mod display;
 
@@ -39,7 +40,7 @@ fn valid_path(entry: &DirEntry) -> bool {
     return false;
 }
 
-fn get_path_options(path: &PathBuf) -> Result<Vec<String>, Error> {
+fn get_path_options(path: &PathBuf, numbered: bool) -> Result<Vec<String>, Error> {
     let paths = fs::read_dir(path.to_owned());
 
     let path_options = paths?
@@ -58,7 +59,16 @@ fn get_path_options(path: &PathBuf) -> Result<Vec<String>, Error> {
         .collect::<Vec<String>>();
     let default_options = [".".into(), "..".into()].to_vec();
 
-    return Ok([default_options, path_options].concat());
+    let mut options = [default_options, path_options].concat();
+    if numbered {
+        for i in 0..options.len() {
+            let mut num_option = format!("[{}] ", i);
+            num_option.push_str(&options[i]);
+            options[i] = num_option;
+        }
+    }
+
+    return Ok(options);
 }
 
 fn confirm_path(path: &PathBuf) -> bool {
@@ -93,7 +103,9 @@ fn handle_selection(
             path.pop();
         }
         idx => {
-            path.push(options[idx].to_string());
+            let re = Regex::new(r"^\[[0-9]+\] ").unwrap();
+            let result = re.replace(options[idx].as_str(), "");
+            path.push(result.to_string());
         }
     };
 
@@ -102,7 +114,7 @@ fn handle_selection(
 
 fn main() -> io::Result<()> {
     let args = Args::parse();
-    println!("{}", args.numbered);
+    let numbered = args.numbered;
 
     let origin = env::current_dir()?;
     let mut path = env::current_dir()?;
@@ -112,17 +124,19 @@ fn main() -> io::Result<()> {
         term_obj().term.clear_screen()?;
         display::display_header(&origin, &path);
 
-        let options = get_path_options(&path)?;
+        let options = get_path_options(&path, numbered)?;
 
-        let selection = Select::with_theme(&term_obj().theme)
-            .items(&options)
+        let selection = FuzzySelect::with_theme(&term_obj().theme)
+            .with_prompt("🔎 Filter: ")
+            .items(&options[..])
             .default(0)
+            .max_length(10)
             .interact_on_opt(&term_obj().term)?;
 
         repl = match selection {
             Some(index) => handle_selection(&origin, &mut path, &options, index),
             None => {
-                term_obj().term.write_line("User did not select anything")?;
+                term_obj().term.clear_screen()?;
                 false
             }
         };
