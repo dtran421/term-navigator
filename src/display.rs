@@ -1,7 +1,7 @@
-use std::path::PathBuf;
+use std::{io::Error, path::PathBuf};
 
 use console::Term;
-use dialoguer::theme::ColorfulTheme;
+use dialoguer::{theme::ColorfulTheme, Confirm, FuzzySelect};
 
 const TITLE_STR: &str = "TERM-NAVIGATOR";
 const PADDING: usize = 10;
@@ -16,6 +16,28 @@ pub fn term_obj() -> TermObj {
         term: Term::stderr(),
         theme: ColorfulTheme::default(),
     }
+}
+
+pub fn confirm_path(path: &PathBuf) -> bool {
+    let pathname = path.to_str().expect("path string");
+
+    let TermObj { term, theme } = term_obj();
+
+    Confirm::with_theme(&theme)
+        .with_prompt(format!("Confirm navigation to: {}?", &pathname))
+        .interact_on(&term)
+        .expect("confirm prompt displays and interactable")
+}
+
+pub fn display_select(options: &Vec<String>, results: usize) -> Result<Option<usize>, Error> {
+    let TermObj { term, theme } = term_obj();
+
+    FuzzySelect::with_theme(&theme)
+        .with_prompt("🔎 Filter: ")
+        .items(&options[..])
+        .default(0)
+        .max_length(results)
+        .interact_on_opt(&term)
 }
 
 fn get_curr_dir(path: &PathBuf) -> String {

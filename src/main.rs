@@ -1,14 +1,10 @@
-use std::env;
-use std::fs::{self, DirEntry};
-use std::io::{self, Error};
-use std::path::PathBuf;
-
 use clap::Parser;
-use dialoguer::{Confirm, FuzzySelect};
-use display::term_obj;
+use display::{term_obj, TermObj};
 use regex::Regex;
+use std::{env, io, path::PathBuf};
 
 mod display;
+mod navigator;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -18,66 +14,25 @@ mod display;
     long_about = "A simple CLI utility for navigating through your filesystem via the terminal."
 )]
 struct Args {
-    /// List results with numbers
-    #[arg(short = 'n', long = "numbered", default_value_t = false)]
+    /// List results with numbers.
+    #[arg(short = 'n', long = "numbered")]
     numbered: bool,
-}
 
-fn valid_path(entry: &DirEntry) -> bool {
-    let path = entry.path();
+    /// Show all folders, including hidden ones.
+    #[arg(short = 'a', long = "all")]
+    all: bool,
 
-    if path.is_dir() {
-        let pathname = path
-            .file_name()
-            .expect("file name exists")
-            .to_str()
-            .expect("file name converts to str");
-        if !pathname.starts_with(".") {
-            return true;
-        }
-    }
+    /// Number of results to display per page.
+    #[arg(short = 'r', long = "results", default_value_t = 10)]
+    results: usize,
 
-    return false;
-}
+    /// Force navigate to folder (skip confirmation).
+    #[arg(short = 'f', long = "force")]
+    force: bool,
 
-fn get_path_options(path: &PathBuf, numbered: bool) -> Result<Vec<String>, Error> {
-    let paths = fs::read_dir(path.to_owned());
-
-    let path_options = paths?
-        .into_iter()
-        .filter_map(|res| res.ok())
-        .filter(|entry| valid_path(entry))
-        .map(|entry| {
-            entry
-                .path()
-                .file_stem()
-                .expect("get file stem from path")
-                .to_str()
-                .expect("convert path to string")
-                .to_owned()
-        })
-        .collect::<Vec<String>>();
-    let default_options = [".".into(), "..".into()].to_vec();
-
-    let mut options = [default_options, path_options].concat();
-    if numbered {
-        for i in 0..options.len() {
-            let mut num_option = format!("[{}] ", i);
-            num_option.push_str(&options[i]);
-            options[i] = num_option;
-        }
-    }
-
-    return Ok(options);
-}
-
-fn confirm_path(path: &PathBuf) -> bool {
-    let pathname = path.to_str().expect("path string");
-
-    Confirm::with_theme(&term_obj().theme)
-        .with_prompt(format!("Confirm navigation to: {}?", &pathname))
-        .interact_on(&term_obj().term)
-        .expect("confirm prompt displays and interactable")
+    /// Simple appearance. Hide header and formatting.
+    #[arg(short = 's', long = "simple")]
+    simple: bool,
 }
 
 fn handle_selection(
@@ -85,6 +40,7 @@ fn handle_selection(
     path: &mut PathBuf,
     options: &Vec<String>,
     index: usize,
+    force: bool,
 ) -> bool {
     match index {
         0 => {
@@ -92,7 +48,10 @@ fn handle_selection(
                 return false;
             }
 
-            let confirm = confirm_path(&path);
+            let confirm = match force {
+                true => true,
+                false => display::confirm_path(&path),
+            };
             if confirm {
                 term_obj().term.clear_screen().expect("console cleared");
                 println!("{}", path.to_str().expect("path string"));
@@ -114,29 +73,34 @@ fn handle_selection(
 
 fn main() -> io::Result<()> {
     let args = Args::parse();
-    let numbered = args.numbered;
+    let Args {
+        numbered,
+        all,
+        results,
+        force,
+        simple,
+    } = args;
 
     let origin = env::current_dir()?;
     let mut path = env::current_dir()?;
 
+    let TermObj { term, .. } = term_obj();
+
     let mut repl = true;
     while repl {
-        term_obj().term.clear_screen()?;
-        display::display_header(&origin, &path);
+        term.clear_screen()?;
+        if !simple {
+            display::display_header(&origin, &path);
+        }
 
-        let options = get_path_options(&path, numbered)?;
+        let options = navigator::get_path_options(&path, numbered, all)?;
 
-        let selection = FuzzySelect::with_theme(&term_obj().theme)
-            .with_prompt("🔎 Filter: ")
-            .items(&options[..])
-            .default(0)
-            .max_length(10)
-            .interact_on_opt(&term_obj().term)?;
+        let selection = display::display_select(&options, results)?;
 
         repl = match selection {
-            Some(index) => handle_selection(&origin, &mut path, &options, index),
+            Some(index) => handle_selection(&origin, &mut path, &options, index, force),
             None => {
-                term_obj().term.clear_screen()?;
+                term.clear_screen()?;
                 false
             }
         };
