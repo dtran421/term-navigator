@@ -21,7 +21,7 @@ pub fn valid_path(entry: &DirEntry, all: bool) -> bool {
     return false;
 }
 
-pub fn get_path_options(path: &PathBuf, numbered: bool, all: bool) -> Result<Vec<String>, Error> {
+pub fn get_path_options(path: &PathBuf, no_index: bool, all: bool) -> Result<Vec<String>, Error> {
     let paths = fs::read_dir(path.to_owned());
 
     let path_options = paths?
@@ -41,7 +41,7 @@ pub fn get_path_options(path: &PathBuf, numbered: bool, all: bool) -> Result<Vec
     let default_options = [".".into(), "..".into()].to_vec();
 
     let mut options = [default_options, path_options].concat();
-    if numbered {
+    if !no_index {
         for i in 0..options.len() {
             let mut num_option = format!("[{}] ", i);
             num_option.push_str(&options[i]);

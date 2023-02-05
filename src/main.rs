@@ -14,9 +14,9 @@ mod navigator;
     long_about = "A simple CLI utility for navigating through your filesystem via the terminal."
 )]
 struct Args {
-    /// List results with numbers.
-    #[arg(short = 'n', long = "numbered")]
-    numbered: bool,
+    /// List results without indexing.
+    #[arg(short = 'n', long = "no-index")]
+    no_index: bool,
 
     /// Show all folders, including hidden ones.
     #[arg(short = 'a', long = "all")]
@@ -74,7 +74,7 @@ fn handle_selection(
 fn main() -> io::Result<()> {
     let args = Args::parse();
     let Args {
-        numbered,
+        no_index,
         all,
         results,
         force,
@@ -93,7 +93,7 @@ fn main() -> io::Result<()> {
             display::display_header(&origin, &path);
         }
 
-        let options = navigator::get_path_options(&path, numbered, all)?;
+        let options = navigator::get_path_options(&path, simple || no_index, all)?;
 
         let selection = display::display_select(&options, results)?;
 
