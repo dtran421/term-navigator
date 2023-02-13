@@ -15,6 +15,7 @@ run_term_navigator ()
     else
         dir=$(/Users/dtran/GitHub/term-navigator/target/release/term-navigator $@)
         cd "$dir"
+        ls
     fi
 }
 
@@ -23,4 +24,4 @@ alias term_navigator=run_term_navigator
 
 ## TODO
 
-[ ] Integrate Text User Interface (TUI) like [Cursive](https://crates.io/crates/cursive)
+- [ ] Integrate Text User Interface (TUI) like [Cursive](https://crates.io/crates/cursive)
